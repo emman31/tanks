@@ -2,7 +2,7 @@ var http = require('http').createServer(onRequest),
   io = require('socket.io').listen(http, {log: false}),
   url = require('url'),
   fs = require('fs');
-//  jewel = require('./jewel');
+  tanks = require('./tanks');
 
 http.listen(8888);
 
@@ -12,6 +12,9 @@ function onRequest(request, response) {
   if (path === '/') {
     path += 'index.html';
   }
+
+  // All client requests for a file are redirected towars the 'client' folder.
+  path = "/client" + path;
 
   var extension = path.split('/').pop().split('.').pop();
   var header;
@@ -42,42 +45,40 @@ function onRequest(request, response) {
 }
 
 io.sockets.on('connection', function(socket) {
-  socket.on('disconnect', function() {
-    jewel.Execute("Disconnect", [socket.id]);
-  });
-/*
-  socket.on('restart', function(debug) {
-    var grid = jewel.Execute("StartGame", [socket.id, debug]);
-    socket.emit('game_started', grid);
-  });
-  socket.on('find_all_matches', function() {
-    jewel.Execute("FindAllMatches", [socket.id]);
-  });
-  socket.on('break_all_matches', function() {
-    var grid = jewel.Execute("BreakAllMatches", [socket.id]);
-    socket.emit('redraw', grid);
-  });
-  socket.on('get_grid_json', function() {
-    var json = jewel.Execute("GetGridJSON", [socket.id]);
-    socket.emit('update_json', json);
-  });
-  socket.on('update_grid_json', function(json) {
-    var grid = jewel.Execute("UpdateGridJSON", [socket.id, json]);
-    socket.emit('redraw', grid);
-  });
-  socket.on('go_down', function() {
-    var grid = jewel.Execute("GoDown", [socket.id]);
-    socket.emit('redraw', grid);
-  });
+  var id = socket.id;
+  console.log("Client connected: " + id);
+  
+  socket.on('execute', function(command, params) {
+    console.log("Executing command '" + command + "' for client '" + id + "'.");
+    var functionToExecute = tanks[command];
 
-  socket.on('swap', function(cell1, cell2) {
-    jewel.Execute("Swap", [socket.id, cell1, cell2]);
-    var grid = jewel.Execute("GetGrid", [socket.id]);
-    socket.emit('redraw', grid);
-  });
+    // Make sure the command is an existing function.
+    if (typeof functionToExecute !== 'function') {
+      console.log(command + " is not a valid command.");
+      return;
+    }
 
-*/
+    // Make sure params is an array of parameters.
+    if (typeof params === 'undefined') {
+      params = new Array();
+    }
+    else if (!(params instanceof Array)) {
+      socket.emit('response', ["The 2nd parameter passed to Execute should be an array of parameters."]);
+      console.log("The 2nd parameter passed to Execute should be an array of parameters.");
+      return;
+    }
+
+    // Execute the function and make sure nothing crashes the server.
+    var returnValue;
+    try {
+      returnValue = functionToExecute.apply(tanks, params);
+      socket.emit('response', returnValue);
+    }
+    catch (e) {
+      socket.emit('response', ["A server error occured. What are you trying to do?!?"]);
+      console.log(e.stack);
+    }
+  });
 });
-
 
 console.log("Server has started.");
